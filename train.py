@@ -1,6 +1,4 @@
-from torch.utils.data import DataLoader
 import torch
-# import model as md
 import preprocess as pr
 from parameters import *
 torch.manual_seed(0)
@@ -12,4 +10,8 @@ print("1.\t"+str(device.type).capitalize()+" detected")
 # Fetch Data
 df_train = pr.load_data(data_file)
 
-print(df_train)
+
+
+
+if __name__ == '__main__':
+    print(df_train)
