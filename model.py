@@ -4,9 +4,9 @@ import torch.nn.functional as F
 torch.manual_seed(0)
 
 
-class Model(nn.Module):
+class Model2(nn.Module):
     def __init__(self, max_seq_len, emb_dim, output_dim, hidden1=16, hidden2=16, hidden3=16):
-        super(Model, self).__init__()
+        super(Model2, self).__init__()
         self.fc1 = nn.Linear(max_seq_len * emb_dim, hidden1)
         self.fc2 = nn.Linear(hidden1, hidden2)
         self.fc3 = nn.Linear(hidden2, hidden3)
@@ -25,10 +25,10 @@ class Model(nn.Module):
         return x#self.out(x)
 
 
-class Model2(nn.Module):
-    def __init__(self, input_size,emb_dim, hidden_size, num_classes):
-        super(Model2, self).__init__()
-        self.l1 = nn.Linear(input_size * emb_dim, hidden_size)
+class Model(nn.Module):
+    def __init__(self, input_size, hidden_size, num_classes):
+        super(Model, self).__init__()
+        self.l1 = nn.Linear(input_size, hidden_size)
         self.l2 = nn.Linear(hidden_size, hidden_size)
         self.l3 = nn.Linear(hidden_size, num_classes)
         self.relu = nn.ReLU()

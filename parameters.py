@@ -23,3 +23,12 @@ hidden1, hidden2, hidden3 = 16, 16, 16
 
 PIK_plot_data = './data/plot_data.dat'
 emb_dim = 300
+
+
+ignore_words = ['?', '!', '.']
+num_epoches = 1000
+batch_size = 8
+learning_rate = 0.001
+# input_size = len(X_train[0])
+hidden_size = 8
+all_words_PIK = './data/all_words.dat'

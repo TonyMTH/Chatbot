@@ -1,15 +1,12 @@
 import copy
 import pickle
-from pathlib import Path
-
+import nltk
 import numpy as np
-import spacy
 import torch
 import json
-
 from torch.utils.data import Dataset, DataLoader
-from torchtext.vocab import FastText
-
+from nltk.stem.porter import PorterStemmer
+stemmer = PorterStemmer()
 torch.manual_seed(0)
 
 
@@ -19,121 +16,83 @@ def load_data(path):
     return intents
 
 
-def train_test_split(df, test=0.3):
-    idx = int(df.shape[0] * (1 - test))
-    return df.iloc[:idx, :], df.iloc[idx:, :]
+class ChatDataGram(Dataset):
 
-
-def preprocessing(sentence):
-    """
-    params sentence: a str containing the sentence we want to preprocess
-    return the tokens list
-    """
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(str(sentence))#.replace("!", " ").replace("!", " ").replace("?", " ").replace(".", " ")
-    tokens = [token.text.lower() for token in doc if not token.is_punct]# and not token.is_stop]
-    return tokens
-
-
-def token_encoder(token, vec):
-    if token == "<pad>":
-        return 1
-    else:
-        try:
-            return vec.stoi[token]
-        except:
-            return 0
-
-
-def encoder(tokens, vec):
-    return [token_encoder(token, vec) for token in tokens]
-
-
-def padding(list_of_indexes, max_seq_len, padding_index=1):
-    output = list_of_indexes + (max_seq_len - len(list_of_indexes)) * [padding_index]
-    return output[:max_seq_len]
-
-
-def collate(batch, vectorizer):
-    inputs = torch.stack([torch.stack([vectorizer(token) for token in sentence[0]]) for sentence in batch])
-    target = torch.LongTensor([item[1] for item in batch])  # Use long tensor to avoid unwanted rounding
-    return inputs, target
-
-
-def load_fasttext(PIK):
-    if not Path(PIK).is_file():
-        vec = FastText()
-        vec.vectors[1] = -torch.ones(vec.vectors[1].shape[0])
-        vec.vectors[0] = torch.zeros(vec.vectors[0].shape[0])
-        with open(PIK, "wb") as f:
-            pickle.dump(vec, f)
-    with open(PIK, "rb") as f:
-        vec = pickle.load(f)
-    return vec
-
-
-def clean_load(intents, fasttext_PIK, y_keys_PIK, PIK, max_seq_len):
-    if not Path(PIK).is_file():
-        clean(intents, fasttext_PIK, y_keys_PIK, PIK, max_seq_len)
-    with open(PIK, "rb") as f:
-        data = pickle.load(f)
-    return data
-
-
-def clean(intents, fasttext_PIK, y_keys_PIK, PIK, max_seq_len):
-    vec = load_fasttext(fasttext_PIK)
-    x, y = [], []
-
-    y_dic = {}
-    last_index = 0
-
-    for intent in intents['intents']:
-        if intent['tag'] not in y_dic.keys():
-            y_dic[intent['tag']] = last_index
-            last_index += 1
-        y_val = y_dic[intent['tag']]
-        for pattern in intent['patterns']:
-            y.append(y_val)
-            sequence = padding(encoder(preprocessing(pattern), vec), max_seq_len=max_seq_len)
-            x.append(sequence)
-
-    data = {'x': x, 'y': y, 'y_dic': y_dic, 'vec': vec}
-
-    print("Dumping file")
-    with open(PIK, "wb") as f:
-        pickle.dump(data, f)
-    with open(y_keys_PIK, "wb") as f:
-        pickle.dump(y_dic, f)
-    print("Done Dumping")
-
-
-class ChatData(Dataset):
-    def __init__(self, x, y, vec, max_seq_len):
-        self.x_data = x
-        self.y_data = y
-        self.max_seq_len = max_seq_len
-        self.vec = vec
-        self.vectorizer = self.get_vectorize
+    def __init__(self, X, y):
+        self.n_samples = len(X)
+        self.x = X
+        self.y = y
 
     def __getitem__(self, index):
-        assert len(self.x_data[index]) == self.max_seq_len
-        return self.x_data[index], self.y_data[index]
+        return self.x[index], self.y[index]
 
     def __len__(self):
-        return len(self.x_data)
-
-    def get_vectorize(self, x):
-        return self.vec.vectors[x]
+        return self.n_samples
 
 
-def data_loader(x, y, batch_size, vec, max_seq_len, num_workers=0):
-    dataset = ChatData(x, y, vec, max_seq_len)
-    data_collate = lambda batch: collate(batch, vectorizer=dataset.vectorizer)
-    return DataLoader(dataset=dataset, batch_size=batch_size, collate_fn=data_collate, shuffle=True, num_workers=num_workers)
+def load_data_gram(X, y, batch_size):
+    dataset = ChatDataGram(X, y)
+    return DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
 
 
-def train_loop(model, epochs, optimizer, criterion, train_loader, test_loader, emb_dim,
-               printing_gap, saved_model_device, model_path, device, MAX_SEQ_LEN, PIK_plot_data):
+def tokenize(sentence):
+    return nltk.word_tokenize(sentence)
+
+
+def stem(word):
+    return stemmer.stem(word.lower())
+
+
+def bag_of_words(tokenized_sentence, words):
+    # stem each word
+    sentence_words = [stem(word) for word in tokenized_sentence]
+    # initialize bag with 0 for each word
+    bag = np.zeros(len(words), dtype=np.float32)
+    for idx, w in enumerate(words):
+        if w in sentence_words:
+            bag[idx] = 1
+
+    return bag
+
+
+def pattern_tag_words(intents, ignore_words, all_words_PIK):
+    all_words = []
+    tags = []
+    patterns = []
+
+    for intent in intents['intents']:
+        tag = intent['tag']
+        tags.append(tag)
+        for pattern in intent['patterns']:
+            w = tokenize(pattern)
+            all_words.extend(w)
+            patterns.append((w, tag))
+
+    all_words = [stem(w) for w in all_words if w not in ignore_words]
+    all_words = sorted(set(all_words))
+    tags = sorted(set(tags))
+
+    print("Dumping all_words")
+    with open(all_words_PIK, "wb") as f:
+        pickle.dump({'all_words': all_words, 'tags': tags}, f)
+    print("Done Dumping")
+
+    return patterns, tags, all_words
+
+
+def get_x_y(patterns, tags, all_words):
+    X_train = []
+    Y_train = []
+    for (pattern_sentence, tag) in patterns:
+        bag = bag_of_words(pattern_sentence, all_words)
+        X_train.append(bag)
+        label = tags.index(tag)
+        Y_train.append(label)
+    return np.array(X_train), np.array(Y_train)
+
+
+def train_loop(model, epochs, optimizer, criterion, train_loader, test_loader,
+               printing_gap, saved_model_device, model_path, device, PIK_plot_data):
     train_loss = []
     train_acc = []
     test_acc = []
@@ -143,14 +102,11 @@ def train_loop(model, epochs, optimizer, criterion, train_loader, test_loader, e
         loss_train = 0
 
         for sentences, labels in train_loader:
-            sentences, labels = sentences.to(device), labels.to(device)
-            sentences.resize_(sentences.size()[0], MAX_SEQ_LEN * emb_dim)
-            # sentences = sentences.requires_grad_()
+            sentences, labels = sentences.to(device), labels.to(dtype=torch.long).to(device)
 
-            optimizer.zero_grad()
-
-            output = model.forward(sentences)  # 1) Forward pass
+            output = model(sentences)  # 1) Forward pass
             loss = criterion(output, labels)  # 2) Compute loss
+            optimizer.zero_grad()
             loss.backward()  # 3) Backward pass
             optimizer.step()  # 4) Update model
 
@@ -161,13 +117,12 @@ def train_loop(model, epochs, optimizer, criterion, train_loader, test_loader, e
         with torch.no_grad():
             train_num_correct = 0
             train_num_samples = 0
+
             for sentences, labels in iter(train_loader):
-                sentences, labels = sentences.to(device), labels.to(device)
-                sentences.resize_(sentences.size()[0], MAX_SEQ_LEN * emb_dim)
+                sentences, labels = sentences.to(device), labels.to(dtype=torch.long).to(device)
 
                 output = model(sentences)
                 _, predictions = output.max(1)
-
                 train_num_correct += (predictions == labels).sum()
                 train_num_samples += predictions.size(0)
 
@@ -175,12 +130,10 @@ def train_loop(model, epochs, optimizer, criterion, train_loader, test_loader, e
             test_num_correct = 0
             test_num_samples = 0
             for sentences, labels in iter(test_loader):
-                sentences, labels = sentences.to(device), labels.to(device)
-                sentences.resize_(sentences.size()[0], MAX_SEQ_LEN * emb_dim)
+                sentences, labels = sentences.to(device), labels.to(dtype=torch.long).to(device)
 
                 output = model(sentences)
                 _, predictions = output.max(1)
-
                 test_num_correct += (predictions == labels).sum()
                 test_num_samples += predictions.size(0)
 
@@ -192,8 +145,8 @@ def train_loop(model, epochs, optimizer, criterion, train_loader, test_loader, e
         test_acc.append(test_accu)
 
         # Save best model
-        if train_accu >= greatest_test_accu:
-            greatest_test_accu = train_accu
+        if test_accu >= greatest_test_accu:
+            greatest_test_accu = test_accu
 
             best_model_state = copy.deepcopy(model)
             best_model_state.to(saved_model_device)
