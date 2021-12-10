@@ -22,7 +22,7 @@ class Model(nn.Module):
         x = F.relu(self.fc3(x))
         # x = self.dropout(x)
         x = self.fc4(x)
-        return self.out(x)
+        return x#self.out(x)
 
 
 class Model2(nn.Module):

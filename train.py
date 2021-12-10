@@ -17,17 +17,19 @@ intents = pr.load_data(data_file)
 
 # Preprocess Data
 print('2.\tProcessing data.......')
-data = pr.clean_load(intents, fasttext_PIK, PIK, max_seq_len)
+data = pr.clean_load(intents, fasttext_PIK, y_keys_PIK, PIK, max_seq_len)
 X, y, y_dic, vec = data['x'], data['y'], data['y_dic'], data['vec']
+
 
 # Split Data
 print('3.\tTrain/Test Split.......')
-train_X, test_X, y_train, y_test = train_test_split(X, y, test_size=.3, stratify=y, random_state=0)
+train_X, test_X, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)#, stratify=y
+# test_X, y_test = train_X, y_train
 
 # Oversample Train Data
-print('4.\tOversampling Train Data.......')
-ros = RandomOverSampler(random_state=0)
-train_X, y_train = ros.fit_resample(train_X, y_train)
+# print('4.\tOversampling Train Data.......')
+# ros = RandomOverSampler(random_state=0)
+# train_X, y_train = ros.fit_resample(train_X, y_train)
 
 # Data Loaders
 print('5.\tData Loaders.......')
@@ -35,8 +37,8 @@ train_loader = pr.data_loader(train_X, y_train, batch_size, vec, max_seq_len)
 test_loader = pr.data_loader(test_X, y_test, batch_size, vec, max_seq_len)
 
 # Define Model
-model = md.Model(max_seq_len, emb_dim, hidden1, hidden2, hidden3, len(y_dic.keys()))
-# model = md.Model2(max_seq_len, emb_dim, 8, len(y_dic.keys()))
+# model = md.Model(max_seq_len, emb_dim, hidden1, hidden2, hidden3, len(y_dic.keys()))
+model = md.Model2(max_seq_len, emb_dim, 8, len(y_dic.keys()))
 model.to(device)
 print("6.\tModel defined and moved to " + str(device.__str__()))
 

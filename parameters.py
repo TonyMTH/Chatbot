@@ -3,9 +3,10 @@ from torch import nn, optim
 
 data_file = 'data/intents.json'
 fasttext_PIK = 'data/fasttext.dat'
-max_seq_len = 10
+y_keys_PIK = 'data/y_keys.dat'
+max_seq_len = 4
 PIK = "data/data_pickle.dat"
-batch_size = 5
+batch_size = 8
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

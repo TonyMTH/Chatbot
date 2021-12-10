@@ -30,8 +30,8 @@ def preprocessing(sentence):
     return the tokens list
     """
     nlp = spacy.load("en_core_web_sm")
-    doc = nlp(str(sentence))
-    tokens = [token.text.lower() for token in doc if not token.is_punct and not token.is_stop]
+    doc = nlp(str(sentence))#.replace("!", " ").replace("!", " ").replace("?", " ").replace(".", " ")
+    tokens = [token.text.lower() for token in doc if not token.is_punct]# and not token.is_stop]
     return tokens
 
 
@@ -72,15 +72,15 @@ def load_fasttext(PIK):
     return vec
 
 
-def clean_load(intents, fasttext_PIK, PIK, max_seq_len):
+def clean_load(intents, fasttext_PIK, y_keys_PIK, PIK, max_seq_len):
     if not Path(PIK).is_file():
-        clean(intents, fasttext_PIK, PIK, max_seq_len)
+        clean(intents, fasttext_PIK, y_keys_PIK, PIK, max_seq_len)
     with open(PIK, "rb") as f:
         data = pickle.load(f)
     return data
 
 
-def clean(intents, fasttext_PIK, PIK, max_seq_len):
+def clean(intents, fasttext_PIK, y_keys_PIK, PIK, max_seq_len):
     vec = load_fasttext(fasttext_PIK)
     x, y = [], []
 
@@ -102,6 +102,8 @@ def clean(intents, fasttext_PIK, PIK, max_seq_len):
     print("Dumping file")
     with open(PIK, "wb") as f:
         pickle.dump(data, f)
+    with open(y_keys_PIK, "wb") as f:
+        pickle.dump(y_dic, f)
     print("Done Dumping")
 
 
@@ -165,6 +167,7 @@ def train_loop(model, epochs, optimizer, criterion, train_loader, test_loader, e
 
                 output = model(sentences)
                 _, predictions = output.max(1)
+
                 train_num_correct += (predictions == labels).sum()
                 train_num_samples += predictions.size(0)
 
@@ -189,8 +192,8 @@ def train_loop(model, epochs, optimizer, criterion, train_loader, test_loader, e
         test_acc.append(test_accu)
 
         # Save best model
-        if test_accu >= greatest_test_accu:
-            greatest_test_accu = test_accu
+        if train_accu >= greatest_test_accu:
+            greatest_test_accu = train_accu
 
             best_model_state = copy.deepcopy(model)
             best_model_state.to(saved_model_device)
